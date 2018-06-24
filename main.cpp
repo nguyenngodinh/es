@@ -16,6 +16,15 @@
 #include <errno.h>
 #include <time.h>
 #include <iostream>
+#include <string>
+#include <vector>
+#include <fstream>
+#include <algorithm>
+#include <iterator>
+#include <unistd.h>
+#include <set>
+#include <functional>
+
 using namespace std;
 
 
@@ -57,77 +66,88 @@ char *form_filename(int chunk, char *dir)
     // One for '/' and one for '\0'
     path_len = dirlen + filelen + 1 + 1;
     path = new char[path_len];
-//    path = malloc(path_len);
     snprintf(path, path_len, "%s/%d", dir, chunk);
 
     return path;
 }
 
-int save_buf(char *buf, int n, char *dir, int chunk)
+int save_buf(const vector<string>& data, char *dir, int chunk)
 {
-    FILE *f = NULL;
-    int nwrite;
     char *path;
-    int ret = 0;
-
     path = form_filename(chunk, dir);
-    f = fopen(path, "wb");
-    if (f == NULL) {
-        perror("fopen");
-        ret = -1;
-        goto exit;
+    cout << "Save chunk " << chunk << " word size=" << data.size() << " to " << path << endl;
+    ofstream of(path);
+    int data_size = data.size();
+    for(int i=0; i<(data_size-1); i++)
+    {
+        of << data[i];
+        of << " ";
     }
+    of << data[data_size-1];
+    of.close();
 
-    nwrite = fwrite(buf, sizeof(int), n, f);
-    if (nwrite != n) {
-        perror("fwrite");
-        ret = -1;
-        goto exit;
-    }
+
+
+//    f = fopen(path, "w");
+//    if (f == NULL) {
+//        perror("fopen");
+//        ret = -1;
+//        goto exit;
+//    }
+
+//    nwrite = fwrite(buf, sizeof(int), n, f);
+//    if (nwrite != n) {
+//        perror("fwrite");
+//        ret = -1;
+//        goto exit;
+//    }
 
 exit:
-    if (f) {
-        fclose(f);
-    }
-
     if (path) {
         free(path);
     }
-
-
-    return ret;
+    return data_size;
 }
 
 // Return chunks number of -1 on error
-int split(FILE *f, off_t filesize, char *dir, char *buf, size_t bufsize)
+int split(ifstream *f, off_t filesize, char *dir, char *buf, size_t bufsize)
 {
-    int chunks;
-    int n, nread;
-    int i;
-
-    n = bufsize / sizeof(int);
-
     // XXX: we assume that filesize % bufsize == 0
-    chunks = filesize / bufsize;
-    for (i = 0; i < chunks; i++)
+    int chunks = filesize / bufsize;
+//    cout << "file size = " << filesize << endl;
+//    cout << "buffer size = " << bufsize << endl;
+//    cout << "Chunks = " << chunks << endl;
+    int size_of_text = 0;
+    vector<string> data;
+    string word;
+//    for (i = 0; i < chunks; i++)
+    int i = 0;
+    while(!f->eof())
     {
-        memset(buf, 0, bufsize);
-        nread = fread(buf, sizeof(int), n, f);
+        *f >> word;
+//        std::cout << word << endl;
+        if(size_of_text+word.size() < bufsize){
+            data.push_back(word);
+            size_of_text++;
+            size_of_text+= word.size();
+        }else{
+//            cout << "data[" << i << "].size=" << data.size()  << "--> size of text = " << size_of_text<< endl;
+            sort(data.begin(), data.end());
+//            cout << "sorted: ";
+//            copy(data.begin(), data.end(), ostream_iterator<string>(cout, " "));
+//            cout << endl << "-------------------------------" << endl;
+            save_buf(data, dir, i);
 
-        if (nread < n) {
-            fprintf(stderr, "I/O error. Asked to read %d bytes, got %d\n", n, nread);
-            return -1;
+            i++;
+            data.clear();
+            data.push_back(word);
+            size_of_text = word.size();
         }
-
-        qsort(buf, nread, sizeof(int), compar);
-        save_buf(buf, nread, dir, i);
-        fprintf(stderr, "Saved chunk #%d of size %ld\n", i, nread * sizeof(int));
     }
-
     return chunks;
 }
 
-int merge(char *dir, char *buf, size_t bufsize, int chunks, size_t offset)
+int merge(char *dir/*, char *buf*//*, size_t bufsize*/, int chunks, size_t offset)
 {
     FILE *f;
     int slice;
@@ -135,7 +155,7 @@ int merge(char *dir, char *buf, size_t bufsize, int chunks, size_t offset)
     int buf_offset;
     int i, n;
 
-    slice = bufsize / chunks;
+//    slice = bufsize / chunks;
     buf_offset = 0;
 
     // Each chunk has `chunk` number of slices.
@@ -153,7 +173,7 @@ int merge(char *dir, char *buf, size_t bufsize, int chunks, size_t offset)
 
 
         // Accumulate slices from each chunk in buffer.
-        n = fread(buf + buf_offset, 1, slice, f);
+//        n = fread(buf + buf_offset, 1, slice, f);
         buf_offset += n;
         fclose(f);
     }
@@ -161,13 +181,19 @@ int merge(char *dir, char *buf, size_t bufsize, int chunks, size_t offset)
     // Thoughout this function we used buf as char array to use byte-addressing.
     // But now we need to act on ints inside that buffer, so we cast it to actual type.
     n = buf_offset / sizeof(int);
-    qsort(buf, n, sizeof(int), compar);
-    print_arr((int *)buf, n);
+//    qsort(buf, n, sizeof(int), compar);
+//    print_arr((int *)buf, n);
 
     return 0;
 }
+struct lessKMerge{
+    bool operator()(pair<ifstream*,string> lhs, pair<ifstream*,string> rhs){
+        return  lhs.second.compare(rhs.second)<0;
+    }
+};
 
-int external_merge_sort(FILE *f, off_t filesize, char *dir, size_t bufsize)
+
+int external_merge_sort(ifstream *f, off_t filesize, char *dir, size_t bufsize)
 {
     int chunks;
     char *buf;
@@ -175,7 +201,6 @@ int external_merge_sort(FILE *f, off_t filesize, char *dir, size_t bufsize)
 
     // XXX: Here is the only buffer available to us.
     buf = new char[bufsize];
-//    buf = malloc(bufsize);
     if (!buf) {
         perror("new");
         return -ENOMEM;
@@ -190,20 +215,57 @@ int external_merge_sort(FILE *f, off_t filesize, char *dir, size_t bufsize)
 
     // Phase 2: merge chunks.
     chunk_offset = 0;
-    while (chunk_offset < bufsize)
-    {
-        fprintf(stderr, "-> Merging chunks at offset %zu/%zu\n", chunk_offset, bufsize);
-        merge(dir, buf, bufsize, chunks, chunk_offset);
-        chunk_offset += bufsize / chunks;
-    }
 
-    free(buf);
+    multiset<pair<ifstream*, string>, lessKMerge> k_merge;//<chunk_fs,text_value>
+    vector<ifstream*> chunk_fs_ptrs;
+    for(int i=0; i<chunks; i++){
+        ifstream* fs = new ifstream(form_filename(i, dir));
+        string word;
+        (*fs) >> word;
+        chunk_fs_ptrs.push_back(fs);
+        pair<ifstream*, string> value(fs,word);
+        k_merge.insert(value);
+//        cout << "value " << i << ":" << value.second << endl;
+    }
+    int count=0;
+    while(!k_merge.empty()){
+//        printf("Sorted: %s\n",k_merge.begin()->second);
+        cout << k_merge.begin()->second << endl;
+        count++;
+        ifstream* fs = k_merge.begin()->first;
+        string word;
+        if(fs->eof()){
+            k_merge.erase(k_merge.begin());
+            delete fs;
+            continue;
+        }
+        (*fs) >> word;
+        k_merge.erase(k_merge.begin());
+        pair<ifstream*, string> temp(fs, word);
+        k_merge.insert(temp);
+    }
+//    cout << "Total: " << count << endl;
+
+//    while (chunk_offset < bufsize)
+//    {
+//        fprintf(stderr, "-> Merging chunks at offset %zu/%zu\n", chunk_offset, bufsize);
+//        merge(dir, buf, bufsize, chunks, chunk_offset);
+//        chunk_offset += bufsize / chunks;
+//    }
+
+//    free(buf);
     return 0;
 }
 
 int main(int argc, const char *argv[])
 {
-    FILE *f;
+//    FILE *f;
+
+//    cout << "physic pages = " << sysconf(_SC_PHYS_PAGES) << endl
+//         << "page size = " << sysconf(_SC_PAGE_SIZE) << endl
+//         << "size = " << sysconf(_SC_PHYS_PAGES)*sysconf(_SC_PAGE_SIZE) << endl;
+
+    ifstream *f;
     char *dirpath;
     size_t bufsize;
     char dirname[] = "sort.XXXXXX";
@@ -211,22 +273,12 @@ int main(int argc, const char *argv[])
     off_t file_size;
     clock_t start, end;
 
-//    if (argc != 3) {
-//        fprintf(stderr, "Usage: %s <file to sort> <buffer size>\n", argv[0]);
-//        exit(EXIT_FAILURE);
-//    }
     if (argc != 2) {
         fprintf(stderr, "Usage: %s <file to sort>\n", argv[0]);
         exit(EXIT_FAILURE);
     }
 
     errno = 0;
-//    bufsize = strtol(argv[2], NULL, 0);
-//    if (errno) {
-//        perror("strtol");
-//        exit(EXIT_FAILURE);
-//    }
-
     // Check that buffer is aliquot part of file size.
     if (stat(argv[1], &sb)) {
         perror("stat");
@@ -234,17 +286,10 @@ int main(int argc, const char *argv[])
     }
 
     file_size = sb.st_size;
-    bufsize = file_size/10;
+    bufsize = file_size/16;
 
-//    if (file_size % bufsize) {
-//        fprintf(stderr, "Buffer size %zu is not divisor of file size %zu ",
-//                bufsize, file_size);
-//        fprintf(stderr, "but this is required.\n");
-//        fprintf(stderr, "You may, for example, choose buffer size %zu\n", file_size / 10);
-//        exit(EXIT_FAILURE);
-//    }
-
-    f = fopen(argv[1], "rb");
+//    f = fopen(argv[1], "rb");
+    f = new ifstream(argv[1]);
     if (f == NULL) {
         perror("fopen");
         exit(EXIT_FAILURE);
@@ -268,6 +313,7 @@ int main(int argc, const char *argv[])
 
 err:
 
-    fclose(f);
+//    fclose(f);
+    f->close();
     return 0;
 }
