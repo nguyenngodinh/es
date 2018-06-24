@@ -72,7 +72,7 @@ int save_buf(const vector<string>& data, char *dir, int chunk)
 {
     char *path;
     path = form_filename(chunk, dir);
-    cerr << "Save chunk " << chunk << " size=" << data.size()/pow(pow(2,10),3) << "GB to " << path << endl;
+    cerr << "Save chunk " << chunk << " contains " << data.size()<< " words to " << path << endl;
     cerr << "-----------------------------------------------\n";
     ofstream of(path, ofstream::binary);
     int data_size = data.size();
@@ -190,7 +190,7 @@ int external_merge_sort(ifstream *f, off_t filesize, char *dir, size_t bufsize)
         count++;
         ifstream* fs = k_merge.begin()->first;
         if(fs->eof()){
-            cerr << "Remove a chunk out of data! ==>" << k_merge.size() << " chunks remain data!";
+            cerr << "Remove a chunk out of data! ==>" << k_merge.size() << " chunks remain data!" << endl;
             k_merge.erase(k_merge.begin());
             delete fs;
             continue;
@@ -201,6 +201,13 @@ int external_merge_sort(ifstream *f, off_t filesize, char *dir, size_t bufsize)
         pair<ifstream*, string> temp(fs, word);
         k_merge.insert(temp);
     }
+    if(!data.empty()){
+        cerr << "Push out " << size_of_text/pow(pow(2,10),3) << "GB as ";
+        copy(data.begin(), data.end(), ostream_iterator<string>(cout, "\n"));
+        cerr << "sorted " << count << " words" << endl;
+        data.clear();
+    }
+
     return 0;
 }
 
