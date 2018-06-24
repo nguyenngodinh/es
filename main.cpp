@@ -236,7 +236,7 @@ int main(int argc, const char *argv[])
 
     file_size = sb.st_size;
 
-    cerr << "File size = " << file_size/pow(pow(2,10),3) << "GB,  mem = " << mem/pow(pow(2,10),3) << "GB" << endl;
+    cerr << "File size = " << file_size/pow(pow(2,10),3) << "GB,  available mem = " << mem/pow(pow(2,10),3) << "GB" << endl;
 
     if(file_size < (off_t)mem/3){
         start = clock();
