@@ -1,13 +1,3 @@
-/*
- * External merge sorting of big file.
- *
- * WARNING: Works only when buffer size is aliquot part of file size!
- *          This is for simplicity of implementation.
- *
- * Copyright (c) 2015 Alex Dzyoba <avd@reduct.ru>
- *
- * This project is licensed under the terms of the MIT license
- */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
