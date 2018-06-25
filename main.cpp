@@ -22,16 +22,6 @@ struct lessKMerge{
         return  lhs.second.compare(rhs.second)<0;
     }
 };
-
-struct lessString{
-    bool operator()(string lhs, string rhs){
-
-
-        return lexicographical_compare(lhs.begin(), lhs.end(), rhs.begin(), rhs.end());
-//        return lhs.compare(rhs)<0;
-    }
-};
-
 char *form_filename(int chunk, char *dir)
 {
     char *path;
@@ -84,6 +74,7 @@ int split(ifstream *f, off_t filesize, char *dir, size_t &max_word_length, size_
     vector<string> data;
     string word;
     int i = 0;
+    clock_t start_read = clock();
     while(!f->eof())
     {
         *f >> word;
@@ -97,19 +88,27 @@ int split(ifstream *f, off_t filesize, char *dir, size_t &max_word_length, size_
             size_of_text++;
             size_of_text+= word.size();
         }else{
-            cerr << i << ":";
-            cerr << "sorting data size=" << data.size() << "~" << size_of_text/pow(pow(2,10),3) << "GB" << endl;
+            cerr << i << ": IO time = " << (clock()-start_read)/CLOCKS_PER_SEC << " secs.\n";
+            cerr << "Sorting data size=" << data.size() << "~" << size_of_text/pow(pow(2,10),3) << "GB" << endl;
             clock_t start_temp = clock();
-            std::make_heap(data.begin(), data.end());
-            std::sort_heap(data.begin(), data.end());
+            if(i%2==0){
+                cerr << "Heap_sort -> ";
+                std::make_heap(data.begin(), data.end());
+                std::sort_heap(data.begin(), data.end());
+            }
+            else{
+                cerr << "Sort -> ";
+                std::sort(data.begin(), data.end());
+            }
             clock_t end_temp = clock();
-            cerr << "complete sort! in " << (end_temp-start_temp)/CLOCKS_PER_SEC << "secs" << endl;
+            cerr << "Complete sort! in " << (end_temp-start_temp)/CLOCKS_PER_SEC << "secs" << endl;
             save_buf(data, dir, i);
 
             i++;
             data.clear();
             data.push_back(word);
             size_of_text = word.size();
+            start_read = clock();
         }
     }
     if(!data.empty()){
