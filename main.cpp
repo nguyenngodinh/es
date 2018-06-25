@@ -65,16 +65,27 @@ int save_buf(const vector<string>& data, char *dir, int chunk)
     cerr << "Save chunk " << chunk << " contains " << data.size()<< " words to " << path << endl;
     cerr << "-----------------------------------------------\n";
     ofstream of(path, ofstream::binary);
-    int data_size = data.size();
-    copy(data.begin(), data.begin()+data_size-1, ostream_iterator<string>(of, " "));
-    of << data[data_size-1];
-    of.close();
+    if(of.is_open())
+    {
+    	int data_size = data.size();
+    	copy(data.begin(), data.begin()+data_size-1, ostream_iterator<string>(of, " "));
+    	of << data[data_size-1];
+    	of.close();
+	if(path)
+		delete path;
+	return data_size;
+
+    }else
+    {
+	cerr << "Error: Can not open file " << path;
+	if(path)
+		delete path;
+	exit(-1);
+    }
+
 
 //exit:
-    if (path) {
-        free(path);
-    }
-    return data_size;
+    return -1;
 }
 
 // Return chunks number of -1 on error
@@ -207,7 +218,7 @@ int main(int argc, const char *argv[])
     ifstream *f;
     char *dirpath;
     size_t bufsize;
-    char dirname[] = "/media/nguyennd/win/test/tmp.XXXXXX";
+    char dirname[] = "tmp.XXXXXX";
     struct stat sb;
     off_t file_size;
     clock_t start, end;
