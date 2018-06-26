@@ -28,6 +28,8 @@
 #define TotalMem sysconf(_SC_PHYS_PAGES)*sysconf(_SC_PAGESIZE)
 #define AvailableMemRate AvailabeMem*1.0/TotalMem
 
+#define devmode 0
+
 
 using namespace std;
 
@@ -35,7 +37,9 @@ pthread_mutex_t lock_running_thread;
 int number_running_thread = 0;
 
 void logout_mem_available(){
+#if (devmode == 1)
     cerr << "Mem available: " << AvailableMemRate << "% over total is " << TotalMem << "GB." << endl;
+#endif
 }
 struct lessKMerge{
     bool operator()(pair<ifstream*,string> lhs, pair<ifstream*,string> rhs){
@@ -80,7 +84,9 @@ int save_buffer(const vector<string>& data, char *dir, int chunk)
 {
     char *path;
     path = form_filename(chunk, dir);
+#if (devmode == 1)
     cerr << "Save chunk " << chunk << " contains " << data.size()<< " words to " << path << endl;
+#endif
     logout_mem_available();
     cerr << "-----------------------------------------------\n";
     ofstream of(path, ofstream::binary);
@@ -97,14 +103,20 @@ int save_buffer(const vector<string>& data, char *dir, int chunk)
 
 void *sort_task(void* arg){
     chunk_data* chunk = (chunk_data*)arg;
+#if (devmode == 1)
     cerr << "Chunk" << chunk->chunkId << ".Start process "<< chunk->data.size() << " words.ThreadId="<< (unsigned int)pthread_self()  << endl;
+#endif
     clock_t start_task = clock();
     std::make_heap(chunk->data.begin(), chunk->data.end());
     std::sort_heap(chunk->data.begin(), chunk->data.end());
+#if (devmode == 1)
     cerr << "Chunk" << chunk->chunkId << ".Done the sort task in " << (double)(clock()-start_task)/CLOCKS_PER_SEC << "secs\n";
     start_task = clock();
+#endif
     save_buffer(chunk->data, chunk->dir, chunk->chunkId);
+#if (devmode == 1)
     cerr << "Chunk" << chunk->chunkId << ".Done the write task in " << (double)(clock()-start_task)/CLOCKS_PER_SEC << "secs\n";
+#endif
     pthread_mutex_lock(&lock_running_thread);
     number_running_thread-=1;
     pthread_mutex_unlock(&lock_running_thread);
@@ -126,8 +138,10 @@ int split(ifstream *f, off_t filesize, char *dir, size_t &max_word_length, size_
     while(!f->eof())
     {
         *f >> word;
+#if (devmode ==1)
         if(word.empty())
             cerr << "+";
+#endif
         if(word.size() > max_word_length)
             max_word_length = word.size();
 
@@ -136,7 +150,9 @@ int split(ifstream *f, off_t filesize, char *dir, size_t &max_word_length, size_
             size_of_text++;
             size_of_text+= word.size();
         }else{
+#if (devmode == 1)
             cerr << i << ": IO time = " << (clock()-start_read)/CLOCKS_PER_SEC << " secs. ThreadId=" << (unsigned int)pthread_self() << endl;
+#endif
             chunk->chunkId = i;
             chunk->dir = dir;
             chunk->mem = size_of_text;
@@ -149,7 +165,9 @@ int split(ifstream *f, off_t filesize, char *dir, size_t &max_word_length, size_
                 pthread_mutex_unlock(&lock_running_thread);
                 if(overthread){
                     usleep(1000);
+#if (devmode == 1)
                     cerr << "Thread is reach to " << max_thread << endl;
+#endif
                 }
                 else{
                     int result = -1;
@@ -174,7 +192,9 @@ int split(ifstream *f, off_t filesize, char *dir, size_t &max_word_length, size_
         }
     }
     if(!chunk->data.empty()){
+#if (devmode == 1)
         cerr << i << ": IO time = " << (clock()-start_read)/CLOCKS_PER_SEC << " secs.\n";
+#endif
         chunk->chunkId = i;
         chunk->dir = dir;
         chunk->mem = size_of_text;
@@ -196,7 +216,9 @@ int split(ifstream *f, off_t filesize, char *dir, size_t &max_word_length, size_
     f->close();
     delete f;
     bool isComplete = false;
+#if (devmode == 1)
     cerr << "Wait to read all data:";
+#endif
     int currentRunning =-1;
     while(!isComplete){
         pthread_mutex_lock(&lock_running_thread);
@@ -206,13 +228,15 @@ int split(ifstream *f, off_t filesize, char *dir, size_t &max_word_length, size_
         if(currentRunning != number_running_thread)
         {
             currentRunning = number_running_thread;
+#if (devmode == 1)
             cerr << "Remain " << currentRunning << " threads!" << endl;
+#endif
         }
         usleep(1000);
     }
-
+#if (devmode == 1)
     cerr << "Complete split " << Byte2GB(filesize) << "GB file to " << i << " chunk file of size " << Byte2GB(bufsize) << "GB" << endl;
-
+#endif
     return i;
 }
 
@@ -266,7 +290,9 @@ int external_merge_sort(ifstream *f, off_t filesize, char *dir, size_t bufsize)
         count++;
         ifstream* fs = k_merge.begin()->first;
         if(fs->eof()){
+#if (devmode == 1)
             cerr << "Remove a chunk out of data! ==>" << k_merge.size() << " chunks remain data!" << endl;
+#endif
             k_merge.erase(k_merge.begin());
             delete fs;
             continue;
@@ -300,7 +326,7 @@ int main(int argc, const char *argv[])
 
 
     if (argc != 2) {
-        fprintf(stderr, "Usage: %s <file to sort>\n", argv[0]);
+        fprintf(stderr, "Usage: %s <file to sort>\n. Note: The result will be in cout (standard output).\n", argv[0]);
         exit(EXIT_FAILURE);
     }
 
@@ -362,7 +388,9 @@ int main(int argc, const char *argv[])
         goto err;
     }
     end = clock();
+#if (devmode == 1)
     cerr << file_size/pow(pow(2,10),3) << "GB sorted in " << (double)(end-start)/CLOCKS_PER_SEC << endl;
+#endif
 
 err:
     return 0;
